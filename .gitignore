@@ -1,0 +1,5 @@
+# Ansible retry files
+*.retry
+
+# Vagrant machine database
+.vagrant
