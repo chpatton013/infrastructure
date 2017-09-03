@@ -34,17 +34,31 @@ end
 
 Vagrant.configure("2") do |config|
   kDomain = "example.com"
+  kNumClient = 1
   kNumNtp = 2
+  kNumDns = 1
 
   config.vm.box = "fedora/25-cloud-base"
 
   all_machines = [
+    makeMachines(
+      num_machines: kNumClient,
+      groups: ["client"],
+      make_name: lambda { |index| "client#{index}" },
+      make_hostname: lambda { |index| "client#{index}.#{kDomain}" },
+      make_ip: lambda { |index| "10.0.0.#{10 + index}" }),
     makeMachines(
       num_machines: kNumNtp,
       groups: ["ntp"],
       make_name: lambda { |index| "ntp#{index}" },
       make_hostname: lambda { |index| "#{index}.ntp.#{kDomain}" },
       make_ip: lambda { |index| "10.0.0.#{20 + index}" }),
+    makeMachines(
+      num_machines: kNumDns,
+      groups: ["dns"],
+      make_name: lambda { |index| "dns#{index}" },
+      make_hostname: lambda { |index| "dns#{index}.#{kDomain}" },
+      make_ip: lambda { |index| "10.0.0.#{30 + index}" }),
   ].reduce(:concat)
 
   # Invert the machine->[group] collection to group->[machine].
