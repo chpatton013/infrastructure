@@ -81,6 +81,7 @@ Vagrant.configure("2") do |config|
       # advantage of ansible's parallel executor.
       if index == all_machines.length - 1
         machine_config.vm.provision("ansible") do |ansible|
+          ansible.verbose = true
           ansible.limit = "all"
           ansible.playbook = "provision.yml"
           ansible.host_vars = machine_hostvars
