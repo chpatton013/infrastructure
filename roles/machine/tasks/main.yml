@@ -1,0 +1,9 @@
+---
+- block:
+  - name: Set hostname
+    hostname: name="{{hostname}}"
+  - name: Set timezone
+    timezone: name="{{timezone}}"
+  - name: Install SELinux Python support
+    dnf: name=libselinux-python state=present
+  become: yes

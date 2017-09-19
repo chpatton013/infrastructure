@@ -1,11 +1,5 @@
 ---
 - block:
-  - name: Set hostname
-    hostname: name="{{hostname}}"
-  - name: Set timezone
-    timezone: name="{{timezone}}"
-  - name: Install Python SELinux package
-    dnf: name=libselinux-python state=present
   - name: Install NTP package
     dnf: name=ntp state=present
   - name: Copy NTP config file
