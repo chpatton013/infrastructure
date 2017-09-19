@@ -3,3 +3,6 @@
 
 # Vagrant machine database
 .vagrant
+
+# Python JIT files
+*.pyc
