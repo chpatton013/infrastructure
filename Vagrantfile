@@ -2,34 +2,60 @@ class Machine
   attr_reader :name
   attr_reader :groups
   attr_reader :hostname
-  attr_reader :ip
+  attr_reader :static_ip
+  attr_reader :hostvars
 
-  def initialize(name:, groups:, hostname:, ip:)
+  def initialize(name:, groups:, hostname:, static_ip:, extra_hostvars:)
     @name = name
     @groups = groups
     @hostname = hostname
-    @ip = ip
-  end
+    @static_ip = static_ip
 
-  def hostvars()
-    return {hostname: @hostname}
+    default_hostvars = {
+      hostname: @hostname,
+      static_ip: @static_ip,
+    }
+    @hostvars = Hash[default_hostvars.merge(extra_hostvars).map() { |key, value|
+      [key, value.to_json()]
+    }]
   end
 
   def define(config)
     config.vm.define(@name) do |machine_config|
-      machine_config.vm.network("private_network", ip: @ip)
+      machine_config.vm.network("private_network", ip: @static_ip)
       yield(machine_config)
     end
   end
 end
 
-def makeMachines(num_machines:, groups:, make_name:, make_hostname:, make_ip:)
-  return (0..num_machines - 1).to_a().map() { |index|
-    Machine.new(name: make_name.(index),
-                groups: groups,
-                hostname: make_hostname.(index),
-                ip: make_ip.(index))
-  }
+class MachineFactory
+  attr_reader :name
+  attr_reader :groups
+  attr_reader :hostname
+  attr_reader :static_ip
+  attr_reader :hostvars
+
+  def initialize(name:, groups:, hostname:, static_ip:, hostvars: nil)
+    @name = name
+    @groups = groups
+    @hostname = hostname
+    @static_ip = static_ip
+    @hostvars = if hostvars then hostvars else lambda { |*args| {} } end
+  end
+
+  def make(index, num_machines)
+    return Machine.new(name: @name.(index),
+                       groups: @groups.(index),
+                       hostname: @hostname.(index),
+                       static_ip: @static_ip.(index),
+                       extra_hostvars: @hostvars.(self, index, num_machines))
+  end
+
+  def makeAll(num_machines)
+    return (0..num_machines - 1).to_a().map() { |index|
+      make(index, num_machines)
+    }
+  end
 end
 
 Vagrant.configure("2") do |config|
@@ -41,24 +67,21 @@ Vagrant.configure("2") do |config|
   config.vm.box = "fedora/25-cloud-base"
 
   all_machines = [
-    makeMachines(
-      num_machines: kNumClient,
-      groups: ["client"],
-      make_name: lambda { |index| "client#{index}" },
-      make_hostname: lambda { |index| "client#{index}.#{kDomain}" },
-      make_ip: lambda { |index| "10.0.0.#{10 + index}" }),
-    makeMachines(
-      num_machines: kNumNtp,
-      groups: ["ntp"],
-      make_name: lambda { |index| "ntp#{index}" },
-      make_hostname: lambda { |index| "#{index}.ntp.#{kDomain}" },
-      make_ip: lambda { |index| "10.0.0.#{20 + index}" }),
-    makeMachines(
-      num_machines: kNumDns,
-      groups: ["dns"],
-      make_name: lambda { |index| "dns#{index}" },
-      make_hostname: lambda { |index| "dns#{index}.#{kDomain}" },
-      make_ip: lambda { |index| "10.0.0.#{30 + index}" }),
+    MachineFactory.new(
+      groups: lambda { |index| ["client"] },
+      name: lambda { |index| "client#{index}" },
+      hostname: lambda { |index| "client#{index}.#{kDomain}" },
+      static_ip: lambda { |index| "10.0.0.#{10 + index}" }).makeAll(kNumClient),
+    MachineFactory.new(
+      groups: lambda { |index| ["ntp"] },
+      name: lambda { |index| "ntp#{index}" },
+      hostname: lambda { |index| "#{index}.ntp.#{kDomain}" },
+      static_ip: lambda { |index| "10.0.0.#{20 + index}" }).makeAll(kNumNtp),
+    MachineFactory.new(
+      groups: lambda { |index| ["dns"] },
+      name: lambda { |index| "dns#{index}" },
+      hostname: lambda { |index| "dns#{index}.#{kDomain}" },
+      static_ip: lambda { |index| "10.0.0.#{30 + index}" }).makeAll(kNumDns),
   ].reduce(:concat)
 
   # Invert the machine->[group] collection to group->[machine].
