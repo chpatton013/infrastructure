@@ -62,7 +62,7 @@ Vagrant.configure("2") do |config|
   kDomain = "example.com"
   kNumClient = 1
   kNumNtp = 2
-  kNumDns = 1
+  kNumDns = 2
 
   config.vm.box = "fedora/25-cloud-base"
 
@@ -81,7 +81,23 @@ Vagrant.configure("2") do |config|
       groups: lambda { |index| ["dns"] },
       name: lambda { |index| "dns#{index}" },
       hostname: lambda { |index| "dns#{index}.#{kDomain}" },
-      static_ip: lambda { |index| "10.0.0.#{30 + index}" }).makeAll(kNumDns),
+      static_ip: lambda { |index| "10.0.0.#{30 + index}" },
+      hostvars: lambda { |factory, machine_index, num_machines|
+        other_nameserver_ips = (0..num_machines - 1).to_a().map() { |index|
+          factory.static_ip().(index)
+        }.select() { |ip| ip != factory.static_ip().(machine_index) }
+        nameserver_fqdns = (0..num_machines - 1).to_a().map() { |index|
+          factory.hostname().(index)
+        }
+
+        {
+          domain: kDomain,
+          trusted_cidrs: ["192.168.0.0/16", "10.0.0.0/16"],
+          private_cidrs: ["192.168.0.0/16", "10.0.0.0/16"],
+          other_nameserver_ips: other_nameserver_ips,
+          nameserver_fqdns: nameserver_fqdns,
+        }
+      }).makeAll(kNumDns),
   ].reduce(:concat)
 
   # Invert the machine->[group] collection to group->[machine].

@@ -1,0 +1,8 @@
+---
+data_directory: "/var/named"
+runtime_directory: "/run/named"
+config_directory: "/etc/named"
+serial: 1
+ttl: 604800
+retry: 86400
+expire: 2419200

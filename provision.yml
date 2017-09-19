@@ -8,3 +8,7 @@
 - hosts: ntp
   roles:
   - ntp
+
+- hosts: dns
+  roles:
+  - dns
