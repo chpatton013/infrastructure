@@ -1,0 +1,29 @@
+---
+- fail: msg="Variable '{{item}}' is not defined"
+  when: item not in hostvars[inventory_hostname]
+  with_items:
+  - dns_backend_host
+  - dns_backend_db_name
+  - dns_backend_db_user_name
+  - dns_backend_db_user_password
+  - hostmaster_host
+  - primary_ns_host
+  - secondary_ns_host
+  - poweradmin_session_key
+
+- block:
+
+  - name: Install PowerDNS and supporting tools
+    dnf:
+      name: "{{item}}"
+      state: present
+    with_items:
+    - pdns-tools
+    - poweradmin
+
+  - name: Create config files
+    template:
+      src: config.inc.php
+      dest: /usr/share/poweradmin/inc/config.inc.php
+
+  become: yes

@@ -1,0 +1,70 @@
+---
+- fail: msg="Variable '{{item}}' is not defined"
+  when: item not in hostvars[inventory_hostname]
+  with_items:
+  - mysql_db_root_password
+
+- block:
+
+  - name: Install MySQL and prerequisites
+    dnf:
+      name: "{{item}}"
+      state: present
+    with_items:
+    - mariadb-devel
+    - mysql
+    - mysql-server
+    - python-devel
+    - redhat-rpm-config
+
+  - name: Install Python MySQL module
+    pip:
+      name: MySQL-python
+
+  - name: Start and Enable MySQL service
+    systemd:
+      name: mysqld
+      state: started
+      enabled: yes
+
+  - name: Set root user password
+    mysql_user:
+      name: root
+      password: "{{mysql_db_root_password}}"
+      check_implicit_admin: yes
+
+  - name: Create .my.cnf
+    template:
+      src: "my.cnf"
+      dest: "/root/.my.cnf"
+      owner: root
+      group: root
+      mode: u=rw,g=,o=
+
+  - name: Remove all anonymous users
+    mysql_user:
+      name: ""
+      host_all: yes
+      state: absent
+
+  - name: Revoke remote root login
+    shell: mysql
+    args:
+      stdin: |
+        DELETE FROM mysql.user
+        WHERE User='root'
+          AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+
+  - name: Drop test database
+    mysql_db:
+      name: test
+      state: absent
+
+  - name: Delete test database privileges
+    shell: mysql
+    args:
+      stdin: |
+        DELETE FROM mysql.db
+        WHERE Db='test' OR Db='test\\_%';
+
+  become: yes

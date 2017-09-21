@@ -1,0 +1,31 @@
+---
+- fail: msg="Variable '{{item}}' is not defined"
+  when: item not in hostvars[inventory_hostname]
+  with_items:
+  - dns_backend_host
+  - dns_backend_db_name
+  - dns_backend_db_user_name
+  - dns_backend_db_user_password
+
+- block:
+
+  - name: Install PowerDNS and supporting tools
+    dnf:
+      name: "{{item}}"
+      state: present
+    with_items:
+    - pdns
+    - pdns-tools
+
+  - name: Create config files
+    template:
+      src: pdns.conf
+      dest: /etc/pdns/pdns.conf
+
+  - name: Start and Enable PowerDNS service
+    systemd:
+      name: pdns
+      state: started
+      enabled: yes
+
+  become: yes

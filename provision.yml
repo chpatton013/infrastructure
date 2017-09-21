@@ -7,6 +7,10 @@
   roles:
   - ntp
 
-- hosts: dns
+- hosts: dns_backend
   roles:
-  - dns
+  - dns_backend
+
+- hosts: auth_dns
+  roles:
+  - auth_dns

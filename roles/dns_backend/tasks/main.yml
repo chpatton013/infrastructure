@@ -1,0 +1,40 @@
+---
+- fail: msg="Variable '{{item}}' is not defined"
+  when: item not in hostvars[inventory_hostname]
+  with_items:
+  - dns_backend_db_user_password
+
+- block:
+
+  - name: Install PowerDNS MySQL backend
+    dnf:
+      name: "{{item}}"
+      state: present
+    with_items:
+    - pdns-backend-mysql
+
+  - name: Check if DNS backend database exists
+    shell: mysql --execute "SHOW DATABASES LIKE '{{dns_backend_db_name}}'" --skip-column-names --silent
+    register: db_exists
+
+  - name: Create DNS backend database
+    mysql_db:
+      name: "{{dns_backend_db_name}}"
+      state: present
+    when: not db_exists.stdout_lines
+
+  - name: Create DNS backend database schema
+    mysql_db:
+      name: "{{dns_backend_db_name}}"
+      state: import
+      target: /usr/share/doc/pdns/schema.mysql.sql
+    when: not db_exists.stdout_lines
+
+  - name: Create DNS backend database user
+    mysql_user:
+      name: "{{dns_backend_db_user_name}}"
+      password: "{{dns_backend_db_user_password}}"
+      priv: "{{dns_backend_db_name}}.*:ALL"
+      state: present
+
+  become: yes
