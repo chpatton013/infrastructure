@@ -1,0 +1,7 @@
+---
+machine_timezone: Etc/UTC
+mysql_db_root_password: password
+dns_backend_db_name: powerdns
+dns_backend_db_user_name: powerdns
+dns_backend_db_user_password: password
+poweradmin_session_key: supersecret

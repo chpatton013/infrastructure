@@ -12,8 +12,7 @@ class Machine
     @static_ip = static_ip
 
     default_hostvars = {
-      hostname: @hostname,
-      static_ip: @static_ip,
+      machine_hostname: @hostname,
     }
     @hostvars = Hash[default_hostvars.merge(extra_hostvars).map() { |key, value|
       [key, value.to_json()]
