@@ -14,4 +14,9 @@
       name: libselinux-python
       state: present
 
+  - name: Update vim-minimal package
+    dnf:
+      name: vim-minimal
+      state: latest
+
   become: yes
