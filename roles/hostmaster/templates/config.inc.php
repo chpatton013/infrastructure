@@ -1,7 +1,7 @@
 <?php
 
 // Database settings
-$db_host = "{{db_backend_host}}";
+$db_host = "{{dns_backend_host}}";
 $db_user = "{{dns_backend_db_user_name}}";
 $db_pass = "{{dns_backend_db_user_password}}";
 $db_name = "{{dns_backend_db_name}}";
