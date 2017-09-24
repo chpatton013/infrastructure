@@ -6,9 +6,4 @@ if rpm --query --quiet python; then
   exit 0
 fi
 
-if [[ "$(id --user)" -ne "0" ]]; then
-  echo Rerunning as root... >&2
-  exec sudo "$0" "$@"
-fi
-
-dnf install --assumeyes python
+sudo dnf install --assumeyes python
