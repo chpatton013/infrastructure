@@ -1,0 +1,19 @@
+---
+- block:
+
+  - name: Install utility packages
+    dnf:
+      name: "{{item}}"
+      state: present
+    with_items:
+    - git
+    - htop
+    - less
+    - nmap
+    - patch
+    - sudo
+    - tmux
+    - tree
+    - vim
+
+  become: yes
