@@ -1,0 +1,23 @@
+---
+version: '2'
+
+services:
+
+  reverse_proxy:
+    build:
+      context: .
+      dockerfile: reverse_proxy.dockerfile
+    ports:
+    - 80:80
+    - 443:443
+    depends_on:
+    - poweradmin
+    links:
+    - poweradmin
+    volumes:
+      - {{ssl_certs_directory}}:/etc/nginx/certs:ro,Z
+
+  poweradmin:
+    build:
+      context: .
+      dockerfile: poweradmin.dockerfile

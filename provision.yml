@@ -8,6 +8,10 @@
   roles:
   - ntp
 
+- hosts: hostmaster
+  roles:
+  - hostmaster
+
 - hosts: dns_backend
   roles:
   - dns_backend

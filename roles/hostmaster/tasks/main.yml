@@ -2,28 +2,85 @@
 - fail: msg="Variable '{{item}}' is not defined"
   when: item not in hostvars[inventory_hostname]
   with_items:
-  - dns_backend_host
   - dns_backend_db_name
   - dns_backend_db_user_name
   - dns_backend_db_user_password
+  - dns_backend_host
   - hostmaster_host
+  - poweradmin_session_key
   - primary_ns_host
   - secondary_ns_host
-  - poweradmin_session_key
+  - ssl_certs_directory
+  - ssl_key_name
 
 - block:
 
-  - name: Install PowerDNS and supporting tools
+  - name: Install Docker and Docker Compose
     dnf:
       name: "{{item}}"
       state: present
     with_items:
-    - pdns-tools
-    - poweradmin
+    - docker
+    - docker-compose
 
-  - name: Create config files
+  - name: Start and Enable Docker service
+    systemd:
+      name: docker
+      state: started
+      enabled: yes
+
+  - name: Create Docker image build directory
+    file:
+      path: /root/poweradmin
+      state: directory
+      mode: u=rwx,g=rx,o=rx
+      owner: root
+      group: root
+
+  - name: Create Docker image build files
     template:
-      src: config.inc.php
-      dest: /usr/share/poweradmin/inc/config.inc.php
+      src: "{{item}}"
+      dest: "/root/poweradmin/{{item}}"
+    with_items:
+    - config.inc.php
+    - docker-compose.yml
+    - reverse_proxy.dockerfile
+    - reverse_proxy.nginx.conf
+    - reverse_proxy.ssl.conf
+    - poweradmin.dockerfile
+    - poweradmin.nginx.conf
+    - poweradmin.sh
+
+  - name: Build reverse-proxy Docker image
+    docker_image:
+      path: /root/poweradmin
+      dockerfile: reverse_proxy.dockerfile
+      name: reverse_proxy
+      # Double the default timeout.
+      # docker-compose was getting impatient with dnf and sent SIGKILL after 60
+      # seconds of inactivity.
+      timeout: 120
+      # Force rebuilds of the image.
+      # Ansible does not rebuild the image even after changing the Dockerfile.
+      force: yes
+
+  - name: Build poweradmin Docker image
+    docker_image:
+      path: /root/poweradmin
+      dockerfile: poweradmin.dockerfile
+      name: poweradmin
+      # Double the default timeout.
+      # docker-compose was getting impatient with dnf and sent SIGKILL after 60
+      # seconds of inactivity.
+      timeout: 120
+      # Force rebuilds of the image.
+      # Ansible does not rebuild the image even after changing the Dockerfile.
+      force: yes
+
+  - name: Run poweradmin Docker service
+    docker_service:
+      project_src: /root/poweradmin
+      state: present
+      restarted: yes
 
   become: yes
