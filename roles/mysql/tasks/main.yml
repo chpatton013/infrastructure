@@ -11,6 +11,7 @@
       name: "{{item}}"
       state: present
     with_items:
+    - gcc
     - mariadb-devel
     - mysql
     - mysql-server
