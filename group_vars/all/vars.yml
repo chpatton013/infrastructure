@@ -5,3 +5,5 @@ dns_backend_db_name: powerdns
 dns_backend_db_user_name: powerdns
 dns_backend_db_user_password: password
 poweradmin_session_key: supersecret
+ssl_keys_directory: /root/keys
+ssl_certs_directory: /root/certs

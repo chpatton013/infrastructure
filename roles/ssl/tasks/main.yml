@@ -1,0 +1,84 @@
+---
+- fail: msg="Variable '{{item}}' is not defined"
+  when: item not in hostvars[inventory_hostname]
+  with_items:
+  - ssl_keys_directory
+  - ssl_certs_directory
+  - ssl_key_name
+  - ssl_country_name
+  - ssl_state_or_province_name
+  - ssl_organization_name
+  - ssl_organizational_unit_name
+  - ssl_common_name
+  - ssl_email_address
+
+- block:
+
+  - name: Install OpenSSL
+    dnf:
+      name: openssl
+      state: present
+
+  - name: Install Python OpenSSL library
+    pip:
+      name: pyOpenSSL
+      state: present
+
+  - name: Create keys directory
+    file:
+      path: "{{ssl_keys_directory}}"
+      state: directory
+      mode: u=rwx,g=,o=
+      owner: root
+      group: root
+
+  - name: Generate private key
+    openssl_privatekey:
+      path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa"
+      size: 4096
+      type: RSA
+
+  - name: Generate public key
+    openssl_publickey:
+      path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa.pub"
+      privatekey_path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa"
+
+  - name: Generate certificate signing request
+    openssl_csr:
+      path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa.csr"
+      privatekey_path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa"
+      country_name: "{{ssl_country_name}}"
+      state_or_province_name: "{{ssl_state_or_province_name}}"
+      organization_name: "{{ssl_organization_name}}"
+      organizational_unit_name: "{{ssl_organizational_unit_name}}"
+      common_name: "{{ssl_common_name}}"
+      email_address: "{{ssl_email_address}}"
+
+  - name: Generate certificate
+    openssl_certificate:
+      path:  "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa.crt"
+      privatekey_path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa"
+      csr_path: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa.csr"
+      provider: selfsigned
+
+  - name: Create certificates directory
+    file:
+      path: "{{ssl_certs_directory}}"
+      state: directory
+      mode: u=rwx,g=,o=
+      owner: root
+      group: root
+
+  - name: Copy private key to certificate directory
+    copy:
+      src: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa"
+      dest: "{{ssl_certs_directory}}/{{ssl_key_name}}.key"
+      remote_src: yes
+
+  - name: Copy certificate to certificates directory
+    copy:
+      src: "{{ssl_keys_directory}}/{{ssl_key_name}}.rsa.crt"
+      dest: "{{ssl_certs_directory}}/{{ssl_key_name}}.crt"
+      remote_src: yes
+
+  become: yes

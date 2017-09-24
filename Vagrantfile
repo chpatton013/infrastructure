@@ -93,6 +93,13 @@ Vagrant.configure("2") do |config|
       static_ip: lambda { |index| "10.0.0.#{30 + index}" },
       hostvars: lambda { |factory, machine_index, num_machines|
         {
+          ssl_key_name: "default",
+          ssl_country_name: "US",
+          ssl_state_or_province_name: "CA",
+          ssl_organization_name: "O",
+          ssl_organizational_unit_name: "OU",
+          ssl_common_name: "CN",
+          ssl_email_address: "chpatton013@gmail.com",
           hostmaster_host: hostmaster_hostname.(0),
           dns_backend_host: dns_backend_static_ip.(0),
           primary_ns_host: auth_dns_hostname.(0),
