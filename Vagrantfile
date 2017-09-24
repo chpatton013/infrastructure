@@ -70,7 +70,7 @@ Vagrant.configure("2") do |config|
 
   hostmaster_hostname = lambda { |index| "hostmaster#{index}.#{kDomain}" }
   dns_backend_static_ip = lambda { |index| "10.0.0.#{40 + index}" }
-  auth_dns_hostname = lambda { |index| "authns#{index}.#{kDomain}" }
+  auth_dns_hostname = lambda { |index| "ns#{index + 1}.#{kDomain}" }
   auth_dns_static_ip = lambda { |index| "10.0.0.#{50 + index}" }
 
   all_machines = [
