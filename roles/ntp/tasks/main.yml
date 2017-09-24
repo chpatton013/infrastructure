@@ -16,12 +16,9 @@
     ignore_errors: yes # This will fail if the NTP port is already bound.
 
   - name: Start and enable the NTP service
-    service:
+    systemd:
       name: ntpd
       state: started
       enabled: yes
-
-  - name: Check NTP service by querying
-    command: ntpq -p
 
   become: yes
