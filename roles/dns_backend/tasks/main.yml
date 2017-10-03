@@ -2,7 +2,10 @@
 - fail: msg="Variable '{{item}}' is not defined"
   when: item not in hostvars[inventory_hostname]
   with_items:
+  - dns_backend_db_user_name
+  - dns_backend_db_user_hosts
   - dns_backend_db_user_password
+  - dns_backend_domains
 
 - block:
 
