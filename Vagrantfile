@@ -159,7 +159,7 @@ class Machine
 
   def hostvars(cluster)
     default_hostvars = {
-      machine_static_ip: @machine_static_ip,
+      machine_static_ip: @static_ip,
       machine_hostname: @hostname,
       machine_dns_record: @dns_record,
     }
