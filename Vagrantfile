@@ -16,6 +16,7 @@ class DnsDomain
   def toHash()
     return {
       name: @name,
+      type: type(),
       metadata: @metadata.map() { |metadata| metadata.toHash() },
       records: @records.map() { |records| records.toHash() },
     }
@@ -166,7 +167,14 @@ class Machine
     extra_hostvars = @hostvars_context.make(cluster)
 
     return Hash[default_hostvars.merge(extra_hostvars).map() { |key, value|
-      [key, value.to_json()]
+      value_json = value.to_json()
+
+      # Double-encode complex hostvars so we can correctly decode them later.
+      if value.kind_of?(Array) or value.kind_of?(Hash)
+        value_json = value_json.to_json()
+      end
+
+      [key, value_json]
     }]
   end
 end

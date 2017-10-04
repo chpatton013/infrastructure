@@ -2,8 +2,9 @@
 - fail: msg="Variable '{{item}}' is not defined"
   when: item not in hostvars[inventory_hostname]
   with_items:
-  - dns_backend_db_user_name
+  - dns_backend_db_name
   - dns_backend_db_user_hosts
+  - dns_backend_db_user_name
   - dns_backend_db_user_password
   - dns_backend_domains
 
@@ -16,28 +17,37 @@
     with_items:
     - pdns-backend-mysql
 
-  - name: Check if DNS backend database exists
-    shell: mysql --execute "SHOW DATABASES LIKE '{{dns_backend_db_name}}'" --skip-column-names --silent
-    register: db_exists
+  - name: Drop DNS backend database
+    mysql_db:
+      name: "{{dns_backend_db_name}}"
+      state: absent
 
   - name: Create DNS backend database
     mysql_db:
       name: "{{dns_backend_db_name}}"
       state: present
-    when: not db_exists.stdout_lines
 
   - name: Create DNS backend database schema
     mysql_db:
       name: "{{dns_backend_db_name}}"
       state: import
       target: /usr/share/doc/pdns/schema.mysql.sql
-    when: not db_exists.stdout_lines
+
+  - name: Create DNS backend database seed script
+    template:
+      src: seed.sql
+      dest: /tmp/seed.sql
+
+  - name: Seed DNS backend database
+    shell: mysql "{{dns_backend_db_name}}" </tmp/seed.sql
 
   - name: Create DNS backend database user
     mysql_user:
       name: "{{dns_backend_db_user_name}}"
+      host: "{{item}}"
       password: "{{dns_backend_db_user_password}}"
       priv: "{{dns_backend_db_name}}.*:ALL"
       state: present
+    with_items: "{{dns_backend_db_user_hosts}}"
 
   become: yes
