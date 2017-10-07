@@ -122,10 +122,10 @@ class HostvarsContext
   end
 
   def make(cluster)
-    return @make_hostvars.(@machine_factory,
-                           cluster,
-                           @machine_index,
-                           @num_machines)
+    return @make_hostvars.call(@machine_factory,
+                               cluster,
+                               @machine_index,
+                               @num_machines)
   end
 end
 
@@ -208,11 +208,11 @@ class MachineFactory
                                            make_hostvars: @hostvars)
 
     return Machine.new(
-      name: @name.(index),
-      groups: @groups.(index),
-      static_ip: @static_ip.(index),
-      hostname: @hostname.(index),
-      dns_record: @dns_record.(index),
+      name: @name.call(index),
+      groups: @groups.call(index),
+      static_ip: @static_ip.call(index),
+      hostname: @hostname.call(index),
+      dns_record: @dns_record.call(index),
       hostvars_context: hostvars_context)
   end
 
