@@ -1,3 +1,4 @@
+# A DNS domain binds metadata and records to a partial domain name.
 class DnsDomain
   attr_reader :name
   attr_reader :metadata
@@ -17,12 +18,13 @@ class DnsDomain
     return {
       name: @name,
       type: type(),
-      metadata: @metadata.map() { |metadata| metadata.toHash() },
-      records: @records.map() { |records| records.toHash() },
+      metadata: @metadata.map(&:toHash),
+      records: @records.map(&:toHash),
     }
   end
 end
 
+# Metadata provides a key->value store for a DNS domain.
 class DnsDomainMetadata
   attr_reader :kind
   attr_reader :content
@@ -40,6 +42,10 @@ class DnsDomainMetadata
   end
 end
 
+# DNS records provide a collection of address mappings with a DNS domain.
+# Records can be of varying types which can map:
+# * subdomains to subdomains
+# * subdomains to IP addresses
 class DnsRecord
   attr_reader :name
   attr_reader :type
@@ -83,6 +89,7 @@ class DnsRecord
   end
 end
 
+# Factory for DnsRecord with parameters for the Start-of-Authority record.
 def makeSoaRecord(cluster, ttl: 86400)
   return DnsRecord.new(name: cluster.nameservers()[0].dns_record(),
                        type: "SOA",
@@ -90,6 +97,7 @@ def makeSoaRecord(cluster, ttl: 86400)
                        ttl: ttl)
 end
 
+# Factory for DnsRecord with parameters for single-IP A-records.
 def makeARecord(machine, ttl: 120)
   return DnsRecord.new(name: machine.dns_record(),
                        type: "A",
@@ -97,15 +105,15 @@ def makeARecord(machine, ttl: 120)
                        ttl: ttl)
 end
 
+# Factory for DnsRecord with parameters for multi-IP A-records.
 def makeARecordGroup(name, machines, ttl: 120)
   return DnsRecord.new(name: name,
                        type: "A",
-                       content: machines.map() { |machine|
-                         machine.static_ip()
-                       }.join(","),
+                       content: machines.map(&:static_ip).join(","),
                        ttl: ttl)
 end
 
+# The runtime context needed when calculating hostvars for each machine.
 class HostvarsContext
   attr_reader :machine_factory
   attr_reader :machine_index
@@ -122,13 +130,17 @@ class HostvarsContext
   end
 
   def make(cluster)
-    return @make_hostvars.call(@machine_factory,
-                               cluster,
-                               @machine_index,
-                               @num_machines)
+    return @make_hostvars.call(
+      @machine_factory,
+      cluster,
+      @machine_index,
+      @num_machines,
+    )
   end
 end
 
+# A single machine in a cluster. A machine represents all of the information
+# needed to define a VM for Vagant.
 class Machine
   attr_reader :name
   attr_reader :groups
@@ -158,19 +170,23 @@ class Machine
     end
   end
 
-  def hostvars(cluster)
-    default_hostvars = {
+  def _defaultHostvars()
+    return {
       machine_static_ip: @static_ip,
       machine_hostname: @hostname,
       machine_dns_record: @dns_record,
     }
+  end
+
+  def hostvars(cluster)
+    default_hostvars = _defaultHostvars()
     extra_hostvars = @hostvars_context.make(cluster)
 
     return Hash[default_hostvars.merge(extra_hostvars).map() { |key, value|
       value_json = value.to_json()
 
       # Double-encode complex hostvars so we can correctly decode them later.
-      if value.kind_of?(Array) or value.kind_of?(Hash)
+      if value.is_a?(Array) || value.is_a?(Hash)
         value_json = value_json.to_json()
       end
 
@@ -179,6 +195,9 @@ class Machine
   end
 end
 
+# A factory to produce any number of machines with the same configuration.
+# Machine factories hold several lambdas, which are evaluated every time a
+# machine is created.
 class MachineFactory
   attr_reader :name
   attr_reader :groups
@@ -198,14 +217,16 @@ class MachineFactory
     @static_ip = static_ip
     @hostname = hostname
     @dns_record = dns_record
-    @hostvars = if hostvars then hostvars else lambda { |*args| {} } end
+    @hostvars = hostvars ? hostvars : ->(*_args) { {} }
   end
 
   def make(index, num_machines)
-    hostvars_context = HostvarsContext.new(machine_factory: self,
-                                           machine_index: index,
-                                           num_machines: num_machines,
-                                           make_hostvars: @hostvars)
+    hostvars_context = HostvarsContext.new(
+      machine_factory: self,
+      machine_index: index,
+      num_machines: num_machines,
+      make_hostvars: @hostvars,
+    )
 
     return Machine.new(
       name: @name.call(index),
@@ -213,7 +234,8 @@ class MachineFactory
       static_ip: @static_ip.call(index),
       hostname: @hostname.call(index),
       dns_record: @dns_record.call(index),
-      hostvars_context: hostvars_context)
+      hostvars_context: hostvars_context,
+    )
   end
 
   def makeAll(num_machines)
@@ -223,6 +245,9 @@ class MachineFactory
   end
 end
 
+# A cluster holds a set of machines, provides accessors for named machine
+# groups, and provides factories for data that is derived from collections of
+# machines.
 class Cluster
   attr_reader :name
   attr_reader :subnet_cidr
@@ -242,12 +267,19 @@ class Cluster
 
   # Invert the machine->[group] collection to group->[machine].
   def machinesByGroup()
-    return @machines.map() { |machine|
+    # Create machine hash.
+    machines_by_group = @machines.map() { |machine|
       Hash[machine.groups().map() { |group| [group, machine.name()] }]
-    }.reduce({}) { |output, group_to_name|
-      group_to_name.each() { |group, name| (output[group] ||= []) << name}
-      output
     }
+
+    # Insert machines into each group list.
+    machines_by_group.each_with_object({}) do |group_to_name, output|
+      group_to_name.each() do |group, name|
+        (output[group] ||= []) << name
+      end
+    end
+
+    return machines_by_group
   end
 
   def hostvarsByMachineName()
@@ -292,89 +324,90 @@ class Cluster
   end
 end
 
-Vagrant.configure("2") do |config|
-  kDomain = "example.com"
-  kNumNtp = 2
-  kNumHostmaster = 1
-  kNumDnsBackend = 1
-  kNumAuthoratativeDns = 2
-  kNumRecursiveDns = 2
+def makeNtpMachines(num_machines, domain:)
+  return MachineFactory.new(
+    groups: ->(_index) { ["ntp"] },
+    name: ->(index) { "ntp#{index}" },
+    static_ip: ->(index) { "10.0.0.#{20 + index}" },
+    hostname: ->(index) { "ntp#{index}" },
+    dns_record: ->(index) { "#{index}.ntp.#{domain}" },
+  ).makeAll(num_machines)
+end
 
-  config.vm.box = "fedora/25-cloud-base"
+def makeHostmasterMachines(num_machines,
+                           domain:,
+                           dns_backend_db_user_password:)
+  return MachineFactory.new(
+    groups: ->(_index) { ["hostmaster"] },
+    name: ->(index) { "hostmaster#{index}" },
+    static_ip: ->(index) { "10.0.0.#{30 + index}" },
+    hostname: ->(index) { "hostmaster#{index}" },
+    dns_record: ->(index) { "hostmaster#{index}.#{domain}" },
+    hostvars: lambda { |_factory, cluster, _machine_index, _num_machines|
+      hostmasters = cluster.hostmasters()
+      dns_backends = cluster.dnsBackends()
+      nameservers = cluster.nameservers()
+      {
+        ssl_key_name: "default",
+        ssl_country_name: "US",
+        ssl_state_or_province_name: "CA",
+        ssl_organization_name: "O",
+        ssl_organizational_unit_name: "OU",
+        ssl_common_name: "CN",
+        ssl_email_address: "chpatton013@gmail.com",
+        hostmaster_host: hostmasters[0].dns_record(),
+        dns_backend_host: dns_backends[0].static_ip(),
+        dns_backend_db_user_password: dns_backend_db_user_password,
+        primary_ns_host: nameservers[0].dns_record(),
+        secondary_ns_host: nameservers[1].dns_record(),
+        poweradmin_session_key: "supersecret",
+      }
+    },
+  ).makeAll(num_machines)
+end
 
-  dns_backend_db_user_password = "password";
+def makeDnsBackendMachines(num_machines,
+                           domain:,
+                           dns_backend_db_user_password:)
+  return MachineFactory.new(
+    groups: ->(_index) { ["dns_backend"] },
+    name: ->(index) { "dns_backend#{index}" },
+    static_ip: ->(index) { "10.0.0.#{40 + index}" },
+    hostname: ->(index) { "dns_backend#{index}" },
+    dns_record: ->(index) { "dns_backend#{index}.#{domain}" },
+    hostvars: lambda { |_factory, cluster, _machine_index, _num_machines|
+      domains = [cluster.dnsDomain(domain)]
+      {
+        mysql_db_root_password: "password",
+        dns_backend_db_user_password: dns_backend_db_user_password,
+        dns_backend_domains: domains.map(&:toHash),
+      }
+    },
+  ).makeAll(num_machines)
+end
 
-  all_machines = [
-    MachineFactory.new(
-      groups: lambda { |index| ["ntp"] },
-      name: lambda { |index| "ntp#{index}" },
-      static_ip: lambda { |index| "10.0.0.#{20 + index}" },
-      hostname: lambda { |index| "ntp#{index}" },
-      dns_record: lambda { |index| "#{index}.ntp.#{kDomain}" },
-    ).makeAll(kNumNtp),
-    MachineFactory.new(
-      groups: lambda { |index| ["hostmaster"] },
-      name: lambda { |index| "hostmaster#{index}" },
-      static_ip: lambda { |index| "10.0.0.#{30 + index}" },
-      hostname: lambda { |index| "hostmaster#{index}" },
-      dns_record: lambda { |index| "hostmaster#{index}.#{kDomain}" },
-      hostvars: lambda { |factory, cluster, machine_index, num_machines|
-        hostmasters = cluster.hostmasters()
-        dns_backends = cluster.dnsBackends()
-        nameservers = cluster.nameservers()
-        {
-          ssl_key_name: "default",
-          ssl_country_name: "US",
-          ssl_state_or_province_name: "CA",
-          ssl_organization_name: "O",
-          ssl_organizational_unit_name: "OU",
-          ssl_common_name: "CN",
-          ssl_email_address: "chpatton013@gmail.com",
-          hostmaster_host: hostmasters[0].dns_record(),
-          dns_backend_host: dns_backends[0].static_ip(),
-          dns_backend_db_user_password: dns_backend_db_user_password,
-          primary_ns_host: nameservers[0].dns_record(),
-          secondary_ns_host: nameservers[1].dns_record(),
-          poweradmin_session_key: "supersecret",
-        }
-      },
-    ).makeAll(kNumHostmaster),
-    MachineFactory.new(
-      groups: lambda { |index| ["dns_backend"] },
-      name: lambda { |index| "dns_backend#{index}" },
-      static_ip: lambda { |index| "10.0.0.#{40 + index}" },
-      hostname: lambda { |index| "dns_backend#{index}" },
-      dns_record: lambda { |index| "dns_backend#{index}.#{kDomain}" },
-      hostvars: lambda { |factory, cluster, machine_index, num_machines|
-        domains = [cluster.dnsDomain(kDomain)]
-        {
-          mysql_db_root_password: "password",
-          dns_backend_db_user_password: dns_backend_db_user_password,
-          dns_backend_domains: domains.map() { |domain| domain.toHash() },
-        }
-      },
-    ).makeAll(kNumDnsBackend),
-    MachineFactory.new(
-      groups: lambda { |index| ["auth_dns"] },
-      name: lambda { |index| "auth_dns#{index}" },
-      static_ip: lambda { |index| "10.0.0.#{50 + index}" },
-      hostname: lambda { |index| "auth_dns#{index}" },
-      dns_record: lambda { |index| "ns#{index + 1}.#{kDomain}" },
-      hostvars: lambda { |factory, cluster, machine_index, num_machines|
-        dns_backends = cluster.dnsBackends()
-        {
-          dns_backend_host: dns_backends[0].static_ip(),
-          dns_backend_db_user_password: dns_backend_db_user_password,
-        }
-      },
-    ).makeAll(kNumAuthoratativeDns),
-  ].reduce(:concat)
+def makeAuthoratativeDnsMachines(num_machines,
+                                 domain:,
+                                 dns_backend_db_user_password:)
+  return MachineFactory.new(
+    groups: ->(_index) { ["dns_backend"] },
+    name: ->(index) { "dns_backend#{index}" },
+    static_ip: ->(index) { "10.0.0.#{40 + index}" },
+    hostname: ->(index) { "dns_backend#{index}" },
+    dns_record: ->(index) { "dns_backend#{index}.#{domain}" },
+    hostvars: lambda { |_factory, cluster, _machine_index, _num_machines|
+      domains = [cluster.dnsDomain(domain)]
+      {
+        mysql_db_root_password: "password",
+        dns_backend_db_user_password: dns_backend_db_user_password,
+        dns_backend_domains: domains.map(&:toHash),
+      }
+    },
+  ).makeAll(num_machines)
+end
 
-  cluster = Cluster.new(name: "primary_cluster",
-                        subnet_cidr: "10.0.0.0/8",
-                        machines: all_machines)
-
-  all_machines.each_with_index() do |machine, index|
+def defineMachines(config:, machines:, cluster:)
+  machines.each_with_index() do |machine, index|
     machine.define(config) do |machine_config|
       machine_config.vm.provision("shell", path: "provision.sh")
 
@@ -391,4 +424,40 @@ Vagrant.configure("2") do |config|
       end
     end
   end
+end
+
+Vagrant.configure("2") do |config|
+  kDomain = "example.com"
+  kNumNtp = 2
+  kNumHostmaster = 1
+  kNumDnsBackend = 1
+  kNumAuthoratativeDns = 2
+  kDnsBackendDbUserPassword = "password"
+
+  config.vm.box = "fedora/25-cloud-base"
+
+  all_machines = [
+    makeNtpMachines(kNumNtp, domain: kDomain),
+    makeHostmasterMachines(
+      kNumHostmaster,
+      domain: kDomain,
+      dns_backend_db_user_password: kDnsBackendDbUserPassword,
+    ),
+    makeDnsBackendMachines(
+      kNumDnsBackend,
+      domain: kDomain,
+      dns_backend_db_user_password: kDnsBackendDbUserPassword,
+    ),
+    makeAuthoratativeDnsMachines(
+      kNumAuthoratativeDns,
+      domain: kDomain,
+      dns_backend_db_user_password: kDnsBackendDbUserPassword,
+    ),
+  ].reduce(:concat)
+
+  cluster = Cluster.new(name: "primary_cluster",
+                        subnet_cidr: "10.0.0.0/8",
+                        machines: all_machines)
+
+  defineMachines(config: config, machines: all_machines, cluster: cluster)
 end
