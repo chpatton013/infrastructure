@@ -390,17 +390,16 @@ def makeAuthoratativeDnsMachines(num_machines,
                                  domain:,
                                  dns_backend_db_user_password:)
   return MachineFactory.new(
-    groups: ->(_index) { ["dns_backend"] },
-    name: ->(index) { "dns_backend#{index}" },
-    static_ip: ->(index) { "10.0.0.#{40 + index}" },
-    hostname: ->(index) { "dns_backend#{index}" },
-    dns_record: ->(index) { "dns_backend#{index}.#{domain}" },
+    groups: ->(_index) { ["auth_dns"] },
+    name: ->(index) { "auth_dns#{index}" },
+    static_ip: ->(index) { "10.0.0.#{50 + index}" },
+    hostname: ->(index) { "auth_dns#{index}" },
+    dns_record: ->(index) { "auth_dns#{index}.#{domain}" },
     hostvars: lambda { |_factory, cluster, _machine_index, _num_machines|
-      domains = [cluster.dnsDomain(domain)]
+      dns_backends = cluster.dnsBackends()
       {
-        mysql_db_root_password: "password",
+        dns_backend_host: dns_backends[0].static_ip(),
         dns_backend_db_user_password: dns_backend_db_user_password,
-        dns_backend_domains: domains.map(&:toHash),
       }
     },
   ).makeAll(num_machines)
@@ -413,7 +412,7 @@ def defineMachines(config:, machines:, cluster:)
 
       # Defer running ansible provisioning until the last machine to take
       # advantage of ansible's parallel executor.
-      if index == all_machines.length - 1
+      if index == machines.length - 1
         machine_config.vm.provision("ansible") do |ansible|
           ansible.verbose = true
           ansible.limit = "all"
