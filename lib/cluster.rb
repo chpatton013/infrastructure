@@ -1,5 +1,9 @@
+require_relative "config"
+require_relative "dns_domain"
+require_relative "dns_record"
+
 # Factory for DnsRecord with parameters for the Start-of-Authority record.
-def makeSoaRecord(cluster, ttl: 86400)
+def makeSoaRecord(cluster, ttl: Config::TTL_SOA)
   return DnsRecord.new(name: cluster.nameservers()[0].dns_record(),
                        type: "SOA",
                        content: cluster.hostmasters()[0].dns_record(),
@@ -7,7 +11,7 @@ def makeSoaRecord(cluster, ttl: 86400)
 end
 
 # Factory for DnsRecord with parameters for single-IP A-records.
-def makeARecord(machine, ttl: 120)
+def makeARecord(machine, ttl: Config::TTL_A_RECORD)
   return DnsRecord.new(name: machine.dns_record(),
                        type: "A",
                        content: machine.static_ip(),
@@ -15,7 +19,7 @@ def makeARecord(machine, ttl: 120)
 end
 
 # Factory for DnsRecord with parameters for multi-IP A-records.
-def makeARecordGroup(name, machines, ttl: 120)
+def makeARecordGroup(name, machines, ttl: Config::TTL_A_RECORD)
   return DnsRecord.new(name: name,
                        type: "A",
                        content: machines.map(&:static_ip).join(","),
@@ -88,9 +92,10 @@ class Cluster
   def dnsDomain(domain_name)
     soa = makeSoaRecord(self)
 
-    # Use DNS to load balance acros all NTP servers.
+    # Use DNS to load balance across all NTP servers.
     ntp = makeARecordGroup("ntp.#{domain_name}", timeservers())
 
+    # Create a separate A-Record for each machine in the cluster.
     machine_records = @machines.map() { |machine| makeARecord(machine) }
 
     return DnsDomain.new(

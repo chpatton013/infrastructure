@@ -1,3 +1,6 @@
+require_relative "hostvars_context"
+require_relative "machine"
+
 # A factory to produce any number of machines with the same configuration.
 # Machine factories hold several lambdas, which are evaluated every time a
 # machine is created.
